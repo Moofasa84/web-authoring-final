@@ -2,9 +2,21 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 
-function PokemonCard({ pokemon }) {
+function PokemonCard({ pokemon, onSelect }) {
     return (
-        <article className="pokemon-card">
+        <article
+            className="pokemon-card"
+            onClick={() => onSelect(pokemon)}
+            onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onSelect(pokemon);
+                }
+            }}
+            role="button"
+            tabIndex={0}
+            aria-label={`View details for ${pokemon.name}`}
+        >
             <img src={pokemon.image} alt={pokemon.name} loading="lazy" />
             <h3>{pokemon.name}</h3>
             <p>Pokédex #{String(pokemon.id).padStart(3, "0")}</p>
@@ -19,6 +31,7 @@ function App() {
     const [error, setError] = useState("");
     const [count, setCount] = useState(0);
     const [reload, setReload] = useState(0);
+    const [selectedPokemon, setSelectedPokemon] = useState(null);
 
     useEffect(() => {
         let ignore = false;
@@ -47,7 +60,9 @@ function App() {
                 }
             } catch {
                 if (!ignore) {
-                    setError("Pokémon could not load. Check your internet connection.");
+                    setError(
+                        "Pokémon could not load. Check your internet connection."
+                    );
                 }
             } finally {
                 if (!ignore) {
@@ -132,11 +147,95 @@ function App() {
 
                     <div className="pokemon-grid">
                         {filteredPokemon.map((item) => (
-                            <PokemonCard key={item.id} pokemon={item} />
+                            <PokemonCard
+                                key={item.id}
+                                pokemon={item}
+                                onSelect={setSelectedPokemon}
+                            />
                         ))}
                     </div>
                 </section>
             </main>
+
+            {selectedPokemon && (
+                <div
+                    onClick={() => setSelectedPokemon(null)}
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        backgroundColor: "rgba(0, 0, 0, 0.8)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: "20px",
+                        zIndex: 1000,
+                    }}
+                >
+                    <section
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="pokemon-detail-name"
+                        onClick={(event) => event.stopPropagation()}
+                        style={{
+                            background: "#202536",
+                            color: "#ffffff",
+                            border: "3px solid #f6c945",
+                            borderRadius: "18px",
+                            padding: "28px",
+                            width: "100%",
+                            maxWidth: "360px",
+                            textAlign: "center",
+                            position: "relative",
+                        }}
+                    >
+                        <button
+                            onClick={() => setSelectedPokemon(null)}
+                            aria-label="Close Pokémon details"
+                            style={{
+                                position: "absolute",
+                                top: "10px",
+                                right: "10px",
+                                background: "#e63946",
+                                color: "white",
+                                border: 0,
+                                borderRadius: "8px",
+                                padding: "8px 12px",
+                                cursor: "pointer",
+                            }}
+                        >
+                            Close ✕
+                        </button>
+
+                        <p style={{ color: "#f6c945", marginTop: "30px" }}>
+                            Pokédex #{String(selectedPokemon.id).padStart(3, "0")}
+                        </p>
+
+                        <img
+                            src={selectedPokemon.image}
+                            alt={selectedPokemon.name}
+                            style={{
+                                width: "180px",
+                                height: "180px",
+                                objectFit: "contain",
+                            }}
+                        />
+
+                        <h2
+                            id="pokemon-detail-name"
+                            style={{
+                                textTransform: "capitalize",
+                                fontSize: "28px",
+                                margin: "10px 0",
+                            }}
+                        >
+                            {selectedPokemon.name}
+                        </h2>
+
+                        <p>Generation One · Kanto Region</p>
+                        <p>You've discovered this Pokémon!</p>
+                    </section>
+                </div>
+            )}
 
             <footer>
                 <p>Built with React, JavaScript, CSS, and the PokéAPI.</p>
