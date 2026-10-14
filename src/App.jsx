@@ -32,6 +32,9 @@ function App() {
     const [count, setCount] = useState(0);
     const [reload, setReload] = useState(0);
     const [selectedPokemon, setSelectedPokemon] = useState(null);
+    const [details, setDetails] = useState(null);
+    const [detailsLoading, setDetailsLoading] = useState(false);
+    const [detailsError, setDetailsError] = useState("");
 
     useEffect(() => {
         let ignore = false;
@@ -49,13 +52,14 @@ function App() {
                 const data = await response.json();
 
                 if (!ignore) {
-                    const pokemonList = data.results.map((item, index) => ({
-                        id: index + 1,
-                        name: item.name,
-                        image: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/shiny/${index + 1}.png`,
-                    }));
-
-                    setPokemon(pokemonList);
+                    setPokemon(
+                        data.results.map((item, index) => ({
+                            id: index + 1,
+                            name: item.name,
+                            image: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/shiny/${index + 1}.png`,
+                            url: item.url,
+                        }))
+                    );
                     setError("");
                 }
             } catch {
@@ -77,6 +81,80 @@ function App() {
             ignore = true;
         };
     }, [reload]);
+
+    useEffect(() => {
+        if (!selectedPokemon) {
+            setDetails(null);
+            setDetailsError("");
+            setDetailsLoading(false);
+            return;
+        }
+
+        let ignore = false;
+
+        async function fetchDetails() {
+            setDetails(null);
+            setDetailsError("");
+            setDetailsLoading(true);
+
+            try {
+                const response = await fetch(selectedPokemon.url);
+
+                if (!response.ok) {
+                    throw new Error("Could not load Pokémon details.");
+                }
+
+                const data = await response.json();
+
+                const speciesResponse = await fetch(data.species.url);
+
+                if (!speciesResponse.ok) {
+                    throw new Error("Could not load the Pokédex description.");
+                }
+
+                const species = await speciesResponse.json();
+
+                const englishEntry = species.flavor_text_entries.find(
+                    (entry) => entry.language.name === "en"
+                );
+
+                if (!ignore) {
+                    setDetails({
+                        types: data.types.map((item) => item.type.name),
+                        abilities: data.abilities.map((item) => ({
+                            name: item.ability.name,
+                            hidden: item.is_hidden,
+                        })),
+                        height: data.height / 10,
+                        weight: data.weight / 10,
+                        stats: data.stats.map((item) => ({
+                            name: item.stat.name,
+                            value: item.base_stat,
+                        })),
+                        description: englishEntry
+                            ? englishEntry.flavor_text.replace(/[\n\f]/g, " ")
+                            : "No Pokédex description is available.",
+                    });
+                }
+            } catch {
+                if (!ignore) {
+                    setDetailsError(
+                        "We couldn't load the details. Close this window and try again."
+                    );
+                }
+            } finally {
+                if (!ignore) {
+                    setDetailsLoading(false);
+                }
+            }
+        }
+
+        fetchDetails();
+
+        return () => {
+            ignore = true;
+        };
+    }, [selectedPokemon]);
 
     const filteredPokemon = pokemon.filter((item) =>
         item.name.includes(search.toLowerCase().trim())
@@ -163,12 +241,13 @@ function App() {
                     style={{
                         position: "fixed",
                         inset: 0,
-                        backgroundColor: "rgba(0, 0, 0, 0.8)",
+                        backgroundColor: "rgba(0, 0, 0, 0.82)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        padding: "20px",
+                        padding: "16px",
                         zIndex: 1000,
+                        overflowY: "auto",
                     }}
                 >
                     <section
@@ -181,11 +260,14 @@ function App() {
                             color: "#ffffff",
                             border: "3px solid #f6c945",
                             borderRadius: "18px",
-                            padding: "28px",
+                            padding: "24px",
                             width: "100%",
-                            maxWidth: "360px",
+                            maxWidth: "520px",
+                            maxHeight: "90vh",
+                            overflowY: "auto",
                             textAlign: "center",
                             position: "relative",
+                            margin: "auto",
                         }}
                     >
                         <button
@@ -206,7 +288,7 @@ function App() {
                             Close ✕
                         </button>
 
-                        <p style={{ color: "#f6c945", marginTop: "30px" }}>
+                        <p style={{ color: "#f6c945", marginTop: "32px" }}>
                             Pokédex #{String(selectedPokemon.id).padStart(3, "0")}
                         </p>
 
@@ -214,8 +296,8 @@ function App() {
                             src={selectedPokemon.image}
                             alt={selectedPokemon.name}
                             style={{
-                                width: "180px",
-                                height: "180px",
+                                width: "160px",
+                                height: "160px",
                                 objectFit: "contain",
                             }}
                         />
@@ -225,14 +307,95 @@ function App() {
                             style={{
                                 textTransform: "capitalize",
                                 fontSize: "28px",
-                                margin: "10px 0",
+                                margin: "8px 0",
                             }}
                         >
                             {selectedPokemon.name}
                         </h2>
 
-                        <p>Generation One · Kanto Region</p>
-                        <p>You've discovered this Pokémon!</p>
+                        {detailsLoading && (
+                            <p role="status">Loading Pokémon details...</p>
+                        )}
+
+                        {detailsError && (
+                            <p role="alert">{detailsError}</p>
+                        )}
+
+                        {details && (
+                            <>
+                                <p style={{ lineHeight: 1.6 }}>
+                                    {details.description}
+                                </p>
+
+                                <h3>Type</h3>
+                                <p style={{ textTransform: "capitalize" }}>
+                                    {details.types.join(" / ")}
+                                </p>
+
+                                <h3>Abilities</h3>
+                                <p style={{ textTransform: "capitalize" }}>
+                                    {details.abilities
+                                        .map(
+                                            (ability) =>
+                                                `${ability.name.replace(/-/g, " ")}${ability.hidden ? " (Hidden)" : ""
+                                                }`
+                                        )
+                                        .join(", ")}
+                                </p>
+
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        justifyContent: "center",
+                                        gap: "28px",
+                                        flexWrap: "wrap",
+                                        margin: "18px 0",
+                                    }}
+                                >
+                                    <p>Height: {details.height} m</p>
+                                    <p>Weight: {details.weight} kg</p>
+                                </div>
+
+                                <h3>Base Stats</h3>
+
+                                <div style={{ textAlign: "left" }}>
+                                    {details.stats.map((stat) => (
+                                        <div key={stat.name} style={{ marginBottom: "12px" }}>
+                                            <div
+                                                style={{
+                                                    display: "flex",
+                                                    justifyContent: "space-between",
+                                                    gap: "12px",
+                                                    textTransform: "capitalize",
+                                                    marginBottom: "4px",
+                                                }}
+                                            >
+                                                <span>{stat.name.replace(/-/g, " ")}</span>
+                                                <strong>{stat.value}</strong>
+                                            </div>
+
+                                            <div
+                                                style={{
+                                                    background: "#41485c",
+                                                    height: "9px",
+                                                    borderRadius: "10px",
+                                                    overflow: "hidden",
+                                                }}
+                                            >
+                                                <div
+                                                    style={{
+                                                        width: `${Math.min(stat.value / 255 * 100, 100)}%`,
+                                                        height: "100%",
+                                                        background: "#f6c945",
+                                                        borderRadius: "10px",
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        )}
                     </section>
                 </div>
             )}
